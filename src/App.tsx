@@ -832,13 +832,18 @@ const ERC1155_INTERFACE = new Interface(ERC1155_ABI);
 
 const StyleWrap: CSSProperties = { display: 'flex', flexWrap: 'wrap', alignContent: 'center', gap: '5px' }
 const StyleIcon: CSSProperties = { width: '30px', height: '30px' }
+
+
 interface Result extends ReadonlyArray<any> {
   readonly [key: string]: any;
 }
 interface ReturnType {
+  type: string;
+  address?: string | undefined;
+  value?: string | undefined;
   title: string;
   args: string[] | Result;
-  content: ReactElement | string;
+  content?: ReactElement | string;
 }
 interface Translation {
   [hash: string]: (args: TranslationArgs) => ReturnType;
@@ -849,7 +854,11 @@ interface Token {
   symbol?: string;
   decimals?: number;
 }
-interface EventList extends Token {
+interface CustomProp {
+  className?: string,
+  address?: string;
+}
+interface EventList extends Token, CustomProp {
   address: string,
   data: string,
   epochNumber: string,
@@ -858,13 +867,13 @@ interface EventList extends Token {
   transactionLogIndex: string,
 
 };
-interface TranslationArgs extends Token {
-  address?: string;
+interface TranslationArgs extends Token, CustomProp {
   data: string;
   event?: {
     total: number;
     list: EventList[];
-  }
+  },
+  value?: string | BigNumber;
 }
 interface TranslationEvent {
   [hash: string]: (args: EventList) => ReturnType;
@@ -877,24 +886,29 @@ interface ReturnDataType {
 const ActionTranslate: Translation = {
   // transfer (ERC20)
   "0xa9059cbb": (arg: TranslationArgs) => {
-    const { icon = TokenIcon, symbol = TokenSymbol, decimals = TokenDecimals, data } = arg;
+    const { icon = TokenIcon, symbol = TokenSymbol, decimals = TokenDecimals, className, data } = arg;
     const parsed = ERC20_INTERFACE.parseTransaction({ data });
     const value = decimals ? formatUnits(parsed.args[1].toString(), decimals) : parsed.args[1].toString();
     return {
+      type: "ERC20_Transfer",
       title: 'Transfer',
       args: parsed.args,
-      content: <div style={{ ...StyleWrap }}>
-        Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} to {shortenAddress(parsed.args[0])}
-      </div>
+      address: parsed.args[0],
+      value,
+      content: <div className={className} style={{ ...StyleWrap }}>
+        Transfer <div className="ta-value">{value}</div> <img className="ta-icon" src={icon} alt={symbol} style={StyleIcon} /> <div className="ta-symbol">{symbol}</div> to <div className="ta-address">{shortenAddress(parsed.args[0])}</div>
+      </div>,
+      templte: "Transfer {value}{icon}{symbol} to {address}"
     };
   },
-  // transferFrom (ERC20,ERC721)
+  // transferFrom (ERC20,ERC721) x
   "0x23b872dd": (arg: TranslationArgs) => {
     const { icon, symbol, decimals, name, data } = arg;
     const parsed = ERC20_INTERFACE.parseTransaction({ data });
     const value = decimals ? formatUnits(parsed.args[2].toString(), decimals) : parsed.args[2].toString();
     if (parsed.args[1] === Zero) { // only ERC721
       return {
+        type: 'ERC721_Burn',
         title: 'Burn',
         args: parsed.args,
         content: <div style={{ ...StyleWrap }}>
@@ -903,6 +917,7 @@ const ActionTranslate: Translation = {
       }
     }
     return {
+      type: 'ERC721_Transfer',
       title: 'Transfer',
       args: parsed.args,
       content: <div style={{ ...StyleWrap }}>
@@ -916,6 +931,8 @@ const ActionTranslate: Translation = {
     const parsed = ERC20_INTERFACE.parseTransaction({ data });
     if (parsed.args[1].isZero()) {
       return {
+        type: "ERC20_Approved",
+        address: parsed.args[0],
         title: 'Revoked',
         args: parsed.args,
         content: <div style={{ ...StyleWrap }}>
@@ -925,6 +942,8 @@ const ActionTranslate: Translation = {
     } else {
       // const value = decimals ? formatUnits(parsed.args[1].toString(), decimals) : parsed.args[1].toString();
       return {
+        type: "ERC20_Approved",
+        address: parsed.args[0],
         title: 'Approved',
         args: parsed.args,
         content: <div style={{ ...StyleWrap }}>
@@ -936,36 +955,33 @@ const ActionTranslate: Translation = {
   // safeTransferFrom (ERC721)
   "0x42842e0e": (arg: TranslationArgs) => {
     // Transfer {amount} of {token image}{contract name}{(token symbol)}
-    const { icon, symbol, name, decimals, data } = arg;
+    const { data } = arg;
     const parsed = ERC721_INTERFACE.parseTransaction({ data });
     const value = parsed.args[2].toString();
     return {
+      type: 'ERC721_SafeTransferFromr',
       title: 'Transfer',
       args: parsed.args,
-      content: <div style={{ ...StyleWrap }}>
-        Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-      </div>
+      value: value,
     };
   },
-  // setApprovalForAll (ERC721, ERC1155)
+  // setApprovalForAll (ERC721, ERC1155) x
   "0xa22cb465": (arg: TranslationArgs) => {
     const { icon, symbol, decimals, data } = arg;
     const parsed = ERC721_INTERFACE.parseTransaction({ data });
     if (parsed.args[1] === false) {
       return {
+        type: "ERC721_Revoked",
         title: 'Revoked',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Revoked {symbol} from {shortenAddress(parsed.args[0])}
-        </div>
+        address: parsed.args[0]
       };
     } else {
       return {
+        type: "ERC721_Approved",
         title: 'Approved',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Approved {symbol} for {shortenAddress(parsed.args[0])}
-        </div>
+        address: parsed.args[0]
       };
     }
   },
@@ -977,19 +993,17 @@ const ActionTranslate: Translation = {
     const value = parsed.args[3].toString();
     if (parsed.args[1] === Zero) {
       return {
+        type: "ERC1155_Burn",
         title: 'Burn',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Burn {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-        </div>
+        value
       }
     } else {
       return {
+        type: "ERC1155_SafeTransferFrom",
         title: 'Transfer',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-        </div>
+        value
       };
     }
   },
@@ -1001,27 +1015,24 @@ const ActionTranslate: Translation = {
     const value = parsed.args[3].reduce((a: BigNumber, b: BigNumber) => a.add(b), BigNumber.from('0')).toString();
     if (parsed.args[1] === Zero) {
       return {
+        type: "ERC1155_BatchBurn",
         title: 'Burn',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Burn {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-        </div>
+        value
       }
     } else if (parsed.args[2] === Zero) {
       return {
+        type: "ERC1155_BatchMint",
         title: 'Mint',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Mint {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-        </div>
+        value
       };
     }
     return {
+      type: "ERC1155_SafeBatchTransferFrom",
       title: 'Transfer',
       args: parsed.args,
-      content: <div style={{ ...StyleWrap }}>
-        Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-      </div>
+      value
     };
   }
 }
@@ -1041,25 +1052,19 @@ const EventTranslate: TranslationEvent = {
   },
   // Transfer (ERC20,ERC721)
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef": (arg: EventList) => {
-    const { icon = TokenIcon, symbol = TokenSymbol, decimals = TokenDecimals, name = TokenName, data } = arg;
     const methodId = "0x23b872dd";
     let eTransaction: TranslationArgs = {
       data: "",
-      icon,
-      symbol,
-      decimals,
-      name,
     }
     // ERC721
     if (arg.data === '0x') {
       // Mint
       if (arg.topics[1] === "0x0000000000000000000000000000000000000000000000000000000000000000") {
         return {
+          type: 'ERC721_Mint',
           title: 'Mint',
           args: [arg.topics[2], arg.topics[3]], // to, tokenId
-          content: <div style={{ ...StyleWrap }}>
-            Mint 1 <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-          </div>
+          value: '1'
         };
       }
       // transferFrom
@@ -1080,72 +1085,61 @@ const EventTranslate: TranslationEvent = {
   },
   // ApprovalForAll (ERC721, 1155)
   "0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31": (arg: EventList) => {
-    const { icon = TokenIcon, symbol = TokenSymbol, decimals = TokenDecimals, name = TokenName, data } = arg;
     const parsed = ERC1155_INTERFACE.parseLog(arg);
     if (parsed.args[2] === false) {
       return {
+        type: "ERC721_Revoked",
         title: 'Revoked',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Revoked <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} to {shortenAddress(parsed.args[0])}
-        </div>
-
+        address: parsed.args[0],
       };
     } else {
       return {
+        type: "ERC721_Approved",
         title: 'Approved',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Approved <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} for {shortenAddress(parsed.args[0])}
-        </div>
+        address: parsed.args[0]
       };
     }
   },
   // TransferSingle (ERC1155)
   "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62": (arg: EventList) => {
-    const { icon = TokenIcon, symbol = TokenSymbol, decimals = TokenDecimals, name = TokenName, data } = arg;
     const parsed = ERC1155_INTERFACE.parseLog(arg);
     const value = parsed.args[4].reduce((a: BigNumber, b: BigNumber) => a.add(b), BigNumber.from('0')).toString();
     return {
+      type: "ERC1155_Transfer",
       title: "TransferSingle",
       args: parsed.args,
-      content: <div style={{ ...StyleWrap }}>
-        TransferSingle {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-      </div>
+      value
     };
   },
   // TransferBatch (ERC1155) 
   "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb": (arg: EventList) => {
-    const { icon = TokenIcon, symbol = TokenSymbol, decimals = TokenDecimals, name = TokenName, data } = arg;
     const parsed = ERC1155_INTERFACE.parseLog(arg);
     const value = parsed.args[4].reduce((a: BigNumber, b: BigNumber) => a.add(b), BigNumber.from('0')).toString();
     if (parsed.args[2] === Zero) {
       return {
+        type: "ERC1155_BatchBurn",
         title: "Burn",
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Burn {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-        </div>
+        value
       };
     } else if (parsed.args[1] === Zero) {
       return {
+        type: "ERC1155_BatchMint",
         title: "Mint",
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Mint {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-        </div>
+        value
       };
     }
     return {
+      type: "ERC1155_SafeBatchTransferFrom",
       title: "Transfer",
       args: parsed.args,
-      content: <div style={{ ...StyleWrap }}>
-        Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-      </div>
+      value
     };
   }
 }
-
 
 export const decodeData = (transaction: TranslationArgs): ReturnDataType | undefined => {
   const methodId: string = transaction.data.slice(0, 10);
@@ -1170,14 +1164,148 @@ export const decodeData = (transaction: TranslationArgs): ReturnDataType | undef
   };
 }
 
+export const decodeData2 = (transaction: TranslationArgs, custom: MultiAction) => {
+  const methodId: string = transaction.data.slice(0, 10);
+  const methodAction = ActionTranslate[methodId];
 
+  if (!methodAction) return;
+  const result = ActionTranslate[methodId](transaction);
+  const actionType: string = result.type;
+  let content;
+  if (actionType && custom[actionType]) {
+
+    const customResult = custom[actionType](result);
+    content = customResult;
+  }
+
+  return {
+    args: result.args,
+    content
+  }
+}
+
+interface ERC20_Transfer {
+  address: string;
+  value: string;
+}
+interface ERC20_Approved {
+  address: string;
+}
+interface ERC20_Revoked {
+  address: string;
+}
+interface ERC721_SafeTransferFromr {
+  value: string
+}
+interface ERC721_Revoked {
+  address: string;
+}
+interface ERC721_Approved {
+  address: string;
+}
+interface ERC1155_SafeTransferFrom {
+  value: string;
+}
+interface ERC1155_Burn {
+  value: string;
+}
+interface ERC1155_SafeBatchTransferFrom {
+  value: string;
+}
+interface ERC1155_BatchBurn {
+  value: string;
+}
+interface ERC1155_BatchMint {
+  value: string;
+}
+interface MultiAction {
+  [key: string]: (result: any) => any;
+  "ERC20_Transfer": ({ address, value }: ERC20_Transfer) => any,
+  "ERC20_Approved": ({ address }: ERC20_Approved) => any,
+  "ERC20_Revoked": ({ address }: ERC20_Revoked) => any,
+  "ERC721_SafeTransferFromr": ({ value }: ERC721_SafeTransferFromr) => any,
+  "ERC721_Revoked": ({ address }: ERC721_Revoked) => any,
+  "ERC721_Approved": ({ address }: ERC721_Approved) => any,
+  "ERC1155_SafeTransferFrom": ({ value }: ERC1155_SafeTransferFrom) => any,
+  "ERC1155_Burn": ({ value }: ERC1155_Burn) => any,
+  "ERC1155_SafeBatchTransferFrom": ({ value }: ERC1155_SafeBatchTransferFrom) => any,
+  "ERC1155_BatchBurn": ({ value }: ERC1155_BatchBurn) => any,
+  "ERC1155_BatchMint": ({ value }: ERC1155_BatchMint) => any,
+}
+let icon = TokenIcon;
+let symbol = 'DOGECARD';
+let name = 'Doge card';
+const custom: MultiAction = {
+  "ERC20_Transfer": ({ address, value }) => {
+    return <div style={{ ...StyleWrap }}>
+      Transfer <div className="ta-value">{value}</div> <img className="ta-icon" src={icon} alt={symbol} style={StyleIcon} /> <div className="ta-symbol">{symbol}</div> to <div className="ta-address">{address && shortenAddress(address)}</div>
+    </div>
+  },
+  "ERC20_Approved": ({ address }) => {
+    return <div style={{ ...StyleWrap }}>
+      Approved <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} for {address && shortenAddress(address)}
+    </div>
+  },
+  "ERC20_Revoked": ({ address }) => {
+    return <div style={{ ...StyleWrap }}>
+      Revoked <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} to {shortenAddress(address)}
+    </div>
+  },
+  "ERC721_SafeTransferFromr": ({ value }) => {
+    return <div style={{ ...StyleWrap }}>
+      Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
+    </div>
+  },
+  "ERC721_Revoked": ({ address }) => {
+    return <div style={{ ...StyleWrap }}>
+      Revoked {symbol} from {shortenAddress(address)}
+    </div>
+  },
+  "ERC721_Approved": ({ address }) => {
+    return <div style={{ ...StyleWrap }}>
+      Approved {symbol} for {shortenAddress(address)}
+    </div>
+  },
+  "ERC1155_SafeTransferFrom": ({ value }) => {
+    return <div style={{ ...StyleWrap }}>
+      Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
+    </div>
+  },
+  "ERC1155_Burn": ({ value }) => {
+    return <div style={{ ...StyleWrap }}>
+      Burn {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
+    </div>
+  },
+  "ERC1155_SafeBatchTransferFrom": ({ value }) => {
+    return <div style={{ ...StyleWrap }}>
+      Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
+    </div>
+  },
+  "ERC1155_BatchBurn": ({ value }) => {
+    return <div style={{ ...StyleWrap }}>
+      Burn {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
+    </div>
+  },
+  "ERC1155_BatchMint": ({ value }) => {
+    return <div style={{ ...StyleWrap }}>
+      Mint {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
+    </div>
+  }
+}
 function App() {
-  useEffect(() => {
 
-  }, [])
   return (
-    <div className="App">
+    <div className="App" >
       {
+        textData.map((e, i) => {
+          const res = decodeData2(e, custom);
+          if (!res) return;
+          return <div className="mt-[10px] flex" key={`textData3` + i}>{res.content}</div>;
+        })
+      }
+
+      < br />
+      {/* {
         textData.map((e, i) => {
           const res = decodeData(e);
           if (!res) return;
@@ -1193,8 +1321,8 @@ function App() {
           }
           return <div className="mt-[10px] flex" key={`textData3` + i}> <span className="font-bold">{res.data.title}:</span>  {res.data.content}</div>;
         })
-      }
-    </div>
+      } */}
+    </div >
   );
 }
 
