@@ -895,10 +895,6 @@ const ActionTranslate: Translation = {
       args: parsed.args,
       address: parsed.args[0],
       value,
-      content: <div className={className} style={{ ...StyleWrap }}>
-        Transfer <div className="ta-value">{value}</div> <img className="ta-icon" src={icon} alt={symbol} style={StyleIcon} /> <div className="ta-symbol">{symbol}</div> to <div className="ta-address">{shortenAddress(parsed.args[0])}</div>
-      </div>,
-      templte: "Transfer {value}{icon}{symbol} to {address}"
     };
   },
   // transferFrom (ERC20,ERC721) x
@@ -911,18 +907,14 @@ const ActionTranslate: Translation = {
         type: 'ERC721_Burn',
         title: 'Burn',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Burn {value} <img src={icon} alt={symbol} style={StyleIcon} /> {name} {symbol}
-        </div>
+        value
       }
     }
     return {
       type: 'ERC721_Transfer',
       title: 'Transfer',
       args: parsed.args,
-      content: <div style={{ ...StyleWrap }}>
-        Transfer {value} <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} to {shortenAddress(parsed.args[1])}
-      </div>
+      value
     }
   },
   // approve (ERC20)
@@ -935,9 +927,6 @@ const ActionTranslate: Translation = {
         address: parsed.args[0],
         title: 'Revoked',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Revoked <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} to {shortenAddress(parsed.args[0])}
-        </div>
       };
     } else {
       // const value = decimals ? formatUnits(parsed.args[1].toString(), decimals) : parsed.args[1].toString();
@@ -946,9 +935,6 @@ const ActionTranslate: Translation = {
         address: parsed.args[0],
         title: 'Approved',
         args: parsed.args,
-        content: <div style={{ ...StyleWrap }}>
-          Approved <img src={icon} alt={symbol} style={StyleIcon} /> {symbol} for {shortenAddress(parsed.args[0])}
-        </div>
       };
     }
   },
@@ -1141,30 +1127,8 @@ const EventTranslate: TranslationEvent = {
   }
 }
 
-export const decodeData = (transaction: TranslationArgs): ReturnDataType | undefined => {
-  const methodId: string = transaction.data.slice(0, 10);
-  const methodAction = ActionTranslate[methodId];
 
-  if (!methodAction) return;
-  const result = ActionTranslate[methodId](transaction);
-  const eventResult: ReturnType[] = []
-  if (transaction.event) {
-    transaction.event.list.forEach((e: EventList) => {
-      const evnetHash = e.topics[0];
-      if (EventTranslate[evnetHash]) {
-        const eResult = EventTranslate[evnetHash](e);
-        eventResult.push(eResult);
-      }
-    });
-  }
-
-  return {
-    data: result,
-    event: eventResult
-  };
-}
-
-export const decodeData2 = (transaction: TranslationArgs, custom: MultiAction) => {
+export const decodeData = (transaction: TranslationArgs, custom: MultiAction) => {
   const methodId: string = transaction.data.slice(0, 10);
   const methodAction = ActionTranslate[methodId];
 
@@ -1178,9 +1142,21 @@ export const decodeData2 = (transaction: TranslationArgs, custom: MultiAction) =
     content = customResult;
   }
 
+  // const eventResult: ReturnType[] = []
+  // if (transaction.event) {
+  //   transaction.event.list.forEach((e: EventList) => {
+  //     const evnetHash = e.topics[0];
+  //     if (EventTranslate[evnetHash]) {
+  //       const eResult = EventTranslate[evnetHash](e);
+  //       eventResult.push(eResult);
+  //     }
+  //   });
+  // }
+
   return {
     args: result.args,
-    content
+    content,
+    // event: eventResult
   }
 }
 
@@ -1298,30 +1274,13 @@ function App() {
     <div className="App" >
       {
         textData.map((e, i) => {
-          const res = decodeData2(e, custom);
+          const res = decodeData(e, custom);
           if (!res) return;
           return <div className="mt-[10px] flex" key={`textData3` + i}>{res.content}</div>;
         })
       }
 
       < br />
-      {/* {
-        textData.map((e, i) => {
-          const res = decodeData(e);
-          if (!res) return;
-          if (res?.event && res.event.length > 0) {
-            return <div className="mt-[10px]" key={`textData0` + i}>
-              <div className="bg-[#ddd] flex" key={`textData1` + i}> <span className="font-bold">{res.data.title}:</span>  {res.data.content}</div>
-              {
-                res.event.map((o: ReturnType, i) => {
-                  return <div className="bg-[#EEE] flex" key={`textData2` + i}> <span className="font-bold">--{o.title}:</span>  {o.content}</div>
-                })
-              }
-            </div>;
-          }
-          return <div className="mt-[10px] flex" key={`textData3` + i}> <span className="font-bold">{res.data.title}:</span>  {res.data.content}</div>;
-        })
-      } */}
     </div >
   );
 }
