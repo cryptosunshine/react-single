@@ -133,7 +133,7 @@ const customUI: MultiAction = {
   ERC721_Mint: ({ value, address, customInfo }) => {
     return (
       <div style={{ ...StyleWrap }}>
-        Mint <div style={{ ...BalanceStyle }}>1</div> of{' '}
+        Mint <div style={{ ...BalanceStyle }}>{value}</div> of{' '}
         {Token(address, customInfo, 'ERC721')}
       </div>
     );
@@ -141,7 +141,7 @@ const customUI: MultiAction = {
   ERC721_Transfer: ({ value, address, customInfo }) => {
     return (
       <div style={{ ...StyleWrap }}>
-        Transfer <div style={{ ...BalanceStyle }}>1</div> of{' '}
+        Transfer <div style={{ ...BalanceStyle }}>{value}</div> of{' '}
         {Token(address, customInfo, 'ERC721')}
       </div>
     );
@@ -149,7 +149,7 @@ const customUI: MultiAction = {
   ERC721_Burn: ({ value, address, customInfo }) => {
     return (
       <div style={{ ...StyleWrap }}>
-        Burn <div style={{ ...BalanceStyle }}>1</div> of{' '}
+        Burn <div style={{ ...BalanceStyle }}>{value}</div> of{' '}
         {Token(address, customInfo, 'ERC721')}
       </div>
     );
